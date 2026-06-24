@@ -34,6 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 # A secure random secret key for signed session cookies.
 # In production, set FLASK_SECRET_KEY in your .env.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
@@ -170,6 +171,33 @@ def reset_session():
     mem.reset(session_id)
     logger.info("Session %s: reset by user", session_id)
     return jsonify({"ok": True})
+
+
+@app.route("/api/load_messages", methods=["POST"])
+def load_messages():
+    """
+    POST /api/load_messages  { "messages": [{"role": str, "content": str}, ...] }
+    Restore a saved conversation into the current server session.
+    Enables the chat history sidebar to fully restore AI context.
+    """
+    data = request.get_json(silent=True) or {}
+    messages = data.get("messages", [])
+
+    session_id = _get_session_id()
+
+    valid = [
+        {"role": m["role"], "content": str(m.get("content", ""))[:_MAX_INPUT_LEN]}
+        for m in messages
+        if isinstance(m, dict) and m.get("role") in ("user", "model") and m.get("content")
+    ]
+
+    mem.reset(session_id)
+    for m in valid:
+        mem.append_turn(session_id, m["role"], m["content"])
+
+    history = mem.get_history(session_id)
+    logger.info("Session %s: loaded %d messages from client", session_id, len(valid))
+    return jsonify({"ok": True, **_history_summary(history)})
 
 
 # ─── Run ─────────────────────────────────────────────────────────────────────
