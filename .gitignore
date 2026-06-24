@@ -1,0 +1,35 @@
+# Environment files — NEVER commit
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Generated images (Week 3)
+week-3-image-generation-studio/generated/*.png
+week-3-image-generation-studio/generated/*.jpg
+week-3-image-generation-studio/generated/export-*.zip
+week-3-image-generation-studio/generated/_history.json
+
+# Screenshots / local dev
+*/screenshots/
+*.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node (bonus projects)
+node_modules/
+.next/

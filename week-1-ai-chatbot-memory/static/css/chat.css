@@ -1,0 +1,14 @@
+/* Week 1 specific overrides — loaded after theme.css */
+/* Keep this file for any styles not in the shared theme */
+
+/* Full height layout */
+html, body { height: 100%; }
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+main.chat-layout {
+  flex: 1;
+}
