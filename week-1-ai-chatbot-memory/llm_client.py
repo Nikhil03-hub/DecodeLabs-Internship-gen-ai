@@ -48,10 +48,9 @@ class LLMError(Exception):
 _PROVIDER = os.environ.get("LLM_PROVIDER", "gemini").lower()
 _GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# Default Gemini Flash model — fast, free-tier friendly.
-# NOTE: Verify the exact current model string against Google AI Studio docs
-# at https://ai.google.dev/gemini-api/docs/models  before deploying.
-_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# gemini-2.5-flash: stable, free-tier, best price-performance (as of 2026)
+# gemini-2.0-flash was SHUT DOWN — do not use.
+_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 _DEFAULT_SYSTEM = (
     "You are a helpful, knowledgeable, and friendly AI assistant. "
@@ -71,7 +70,7 @@ def check_config() -> None:
     if _PROVIDER == "gemini" and not _GEMINI_API_KEY:
         raise LLMError(
             "GEMINI_API_KEY is not set. "
-            "Copy .env.example → .env and add your key from https://aistudio.google.com/apikey",
+            "Copy .env.example to .env and add your key from https://aistudio.google.com/apikey",
             code="auth",
         )
 
@@ -143,32 +142,52 @@ def _gemini_generate(
             raise  # Don't swallow typed errors
 
         except Exception as exc:
-            print("RAW GEMINI ERROR:", repr(exc))
+            raw_err = repr(exc)
             err_str = str(exc).lower()
+            logger.error("RAW GEMINI ERROR (attempt %d): %s", attempt, raw_err)
 
-            # Rate limit — exponential back-off
-            if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                if attempt < _MAX_RETRIES:
-                    wait = _BACKOFF_BASE * (2 ** (attempt - 1))
-                    logger.warning("Gemini rate-limit hit; retrying in %.1fs (attempt %d)…", wait, attempt)
-                    time.sleep(wait)
-                    continue
+            # Auth / invalid key — check BEFORE rate limit
+            if any(k in err_str for k in (
+                "api_key_invalid", "api key", "permission_denied",
+                "api_key not valid", "invalid api key",
+                "unauthenticated", "401", "403",
+            )) or ("invalid" in err_str and "key" in err_str):
                 raise LLMError(
-                    "API rate limit reached. Please wait a moment and try again.",
-                    code="rate_limit",
-                ) from exc
-
-            # Auth
-            if "api_key" in err_str or "401" in err_str or "invalid" in err_str and "key" in err_str:
-                raise LLMError(
-                    "Invalid GEMINI_API_KEY. Check your key in .env.",
+                    f"Invalid or missing GEMINI_API_KEY. "
+                    f"Get a free key at https://aistudio.google.com/apikey. "
+                    f"Raw error: {exc}",
                     code="auth",
                 ) from exc
 
-            # Safety block
-            if "safety" in err_str or "blocked" in err_str or "harm" in err_str:
+            # Model not found / shut down
+            if any(k in err_str for k in (
+                "model not found", "not found", "404",
+                "invalid_argument", "model_not_found",
+            )):
                 raise LLMError(
-                    "The request was blocked by safety filters.",
+                    f"Model '{_GEMINI_MODEL}' not found or shut down. "
+                    f"Set GEMINI_MODEL=gemini-2.5-flash in .env. Raw: {exc}",
+                    code="unknown",
+                ) from exc
+
+            # Rate limit / quota — exponential back-off
+            if any(k in err_str for k in ("429", "quota", "resource_exhausted", "rate_limit")):
+                if attempt < _MAX_RETRIES:
+                    wait = _BACKOFF_BASE * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Gemini rate-limit; retrying in %.1fs (attempt %d)…", wait, attempt
+                    )
+                    time.sleep(wait)
+                    continue
+                raise LLMError(
+                    f"Gemini quota/rate-limit reached. Free tier: 15 req/min. Raw: {exc}",
+                    code="rate_limit",
+                ) from exc
+
+            # Safety block
+            if any(k in err_str for k in ("safety", "blocked", "harm", "recitation")):
+                raise LLMError(
+                    "The request was blocked by safety filters. Try rephrasing.",
                     code="safety",
                 ) from exc
 
@@ -184,10 +203,10 @@ def _gemini_generate(
                     code="network",
                 ) from exc
 
-            # Unknown
+            # Unknown — pass raw error through so it's visible
             logger.error("Gemini API error (attempt %d): %s", attempt, exc, exc_info=True)
             raise LLMError(
-                f"An unexpected error occurred: {exc}",
+                f"Gemini API error: {exc}",
                 code="unknown",
             ) from exc
 
@@ -240,12 +259,7 @@ def generate(
             system=system,
         )
 
-    # Future providers slot here:
-    # elif _PROVIDER == "openai":
-    #     return _openai_generate(...)
-    # elif _PROVIDER == "anthropic":
-    #     return _anthropic_generate(...)
-
+    # Future providers: add openai/anthropic backends here behind same signature.
     raise LLMError(
         f"Unknown LLM_PROVIDER '{_PROVIDER}'. Supported: gemini",
         code="unknown",
