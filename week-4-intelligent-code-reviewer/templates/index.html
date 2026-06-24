@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Code Reviewer — DecodeLabs GenAI Week 4</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; }
+    body { display: flex; flex-direction: column; }
+
+    /* ── Layout ── */
+    .reviewer-layout {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      overflow: hidden;
+    }
+
+    /* ── Left: Input panel ── */
+    .input-panel {
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .input-panel-header {
+      padding: 1rem 1.25rem 0;
+      flex-shrink: 0;
+    }
+
+    .panel-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      padding: 0 1.25rem;
+    }
+
+    .panel-tab {
+      padding: 0.625rem 1rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .panel-tab:hover { color: var(--text); }
+    .panel-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+    .tab-pane { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .tab-pane.active { display: flex; }
+
+    /* Monaco container */
+    .monaco-container {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    #monaco-editor {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      flex: 1;
+      margin: 1rem;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+      background: var(--surface-2);
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--brand);
+      background: rgba(99,102,241,0.05);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .drop-icon { font-size: 2.5rem; }
+    .drop-title { font-size: 0.9375rem; font-weight: 600; color: var(--text); }
+    .drop-subtitle { font-size: 0.8125rem; color: var(--text-muted); text-align: center; }
+    .drop-file-selected { font-size: 0.8125rem; color: var(--brand); font-weight: 500; }
+
+    /* Input footer */
+    .input-footer {
+      flex-shrink: 0;
+      padding: 0.875rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    /* ── Right: Results panel ── */
+    .results-panel {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Empty state */
+    .results-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    /* Score ring */
+    .score-section {
+      padding: 1.5rem;
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .score-ring-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .score-ring-svg { transform: rotate(-90deg); }
+
+    .score-ring-bg {
+      fill: none;
+      stroke: var(--surface-3);
+      stroke-width: 6;
+    }
+
+    .score-ring-fill {
+      fill: none;
+      stroke-width: 6;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1),
+                  stroke 0.4s ease;
+      stroke-dasharray: 251.2;
+      stroke-dashoffset: 251.2;
+    }
+
+    .score-ring-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .score-number {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1;
+      font-family: var(--font-mono);
+    }
+
+    .score-label {
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .score-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .score-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.375rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .score-summary {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: 0.625rem;
+      padding: 0.875rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.3125rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all var(--transition);
+    }
+
+    .stat-chip.active { opacity: 1 !important; border-color: currentColor; }
+    .stat-chip:not(.active) { opacity: 0.65; }
+
+    .stat-chip.critical { color: #ff4444; background: rgba(255,68,68,0.1); }
+    .stat-chip.high     { color: #ff9144; background: rgba(255,145,68,0.1); }
+    .stat-chip.medium   { color: #ffcc44; background: rgba(255,204,68,0.1); }
+    .stat-chip.low      { color: #44aaff; background: rgba(68,170,255,0.1); }
+    .stat-chip.info     { color: #aaaaaa; background: rgba(170,170,170,0.1); }
+    .stat-chip.all      { color: var(--text-dim); background: var(--surface-2); }
+
+    /* Result tabs */
+    .result-tabs {
+      display: flex;
+      padding: 0 1.5rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Bug cards */
+    .bugs-list {
+      flex: 1;
+      padding: 1rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+    }
+
+    .bug-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all var(--transition);
+      animation: card-in 0.25s ease-out;
+    }
+
+    @keyframes card-in {
+      from { opacity:0; transform:translateY(4px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    .bug-card:hover { border-color: rgba(99,102,241,0.25); }
+
+    .bug-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      background: var(--surface);
+      user-select: none;
+    }
+
+    .bug-card-header:hover { background: var(--surface-2); }
+
+    .severity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .severity-dot.critical { background: #ff4444; box-shadow: 0 0 6px #ff444466; }
+    .severity-dot.high     { background: #ff9144; }
+    .severity-dot.medium   { background: #ffcc44; }
+    .severity-dot.low      { background: #44aaff; }
+    .severity-dot.info     { background: #888888; }
+
+    .bug-title {
+      flex: 1;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .bug-line {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: var(--surface-3);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .severity-badge {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .severity-badge.critical { color: #ff4444; background: rgba(255,68,68,0.12); }
+    .severity-badge.high     { color: #ff9144; background: rgba(255,145,68,0.12); }
+    .severity-badge.medium   { color: #ffcc44; background: rgba(255,204,68,0.12); }
+    .severity-badge.low      { color: #44aaff; background: rgba(68,170,255,0.12); }
+    .severity-badge.info     { color: #aaaaaa; background: rgba(170,170,170,0.12); }
+
+    .category-tag {
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      background: var(--surface-3);
+      padding: 1px 7px;
+      border-radius: 4px;
+    }
+
+    .bug-card-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      background: var(--surface-2);
+      border-top: 1px solid transparent;
+    }
+
+    .bug-card.open .bug-card-body {
+      max-height: 400px;
+      border-top-color: var(--border);
+    }
+
+    .bug-card-inner {
+      padding: 0.875rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+    }
+
+    .bug-desc {
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .bug-suggestion {
+      font-size: 0.8125rem;
+      color: var(--text);
+      line-height: 1.6;
+      background: rgba(99,102,241,0.05);
+      border-left: 3px solid var(--brand);
+      padding: 0.5rem 0.75rem;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+
+    /* Fixed code panel */
+    .code-panel {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      padding: 1rem 1.5rem;
+      gap: 1rem;
+    }
+
+    .code-panel.active { display: flex; }
+
+    #fixed-code-container {
+      flex: 1;
+      min-height: 400px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    /* Diff panel */
+    .diff-panel {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      padding: 1rem 1.5rem;
+      gap: 1rem;
+    }
+
+    .diff-panel.active { display: flex; }
+
+    #diff-container {
+      flex: 1;
+      min-height: 500px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    /* Loading overlay */
+    .analyzing-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(11,15,23,0.85);
+      backdrop-filter: blur(6px);
+      z-index: 500;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+    }
+
+    .analyzing-overlay.active { display: flex; }
+
+    .analyzing-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem 2.5rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      min-width: 280px;
+    }
+
+    .analyzing-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--surface-3);
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .analyzing-step {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+
+    /* Export bar */
+    .export-bar {
+      padding: 0.875rem 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.625rem;
+      flex-shrink: 0;
+    }
+
+    /* Performance notes */
+    .perf-notes {
+      margin: 0 1.5rem 1rem;
+      padding: 0.875rem 1rem;
+      background: rgba(34,211,238,0.05);
+      border: 1px solid rgba(34,211,238,0.15);
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      html, body { overflow: auto; }
+      .reviewer-layout { grid-template-columns: 1fr; overflow: visible; }
+      .input-panel { border-right: none; border-bottom: 1px solid var(--border); height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <span class="wordmark">DecodeLabs · GenAI Suite</span>
+  </a>
+  <div class="flex items-center gap-3">
+    <div id="status-pill" class="status-pill">
+      <span class="status-dot online" id="status-dot"></span>
+      <span id="status-text">Ready</span>
+    </div>
+    <span class="navbar-project-label hide-mobile">Week 4 · Code Reviewer</span>
+  </div>
+</nav>
+
+<main class="reviewer-layout">
+
+  <!-- ═══ INPUT PANEL ═══ -->
+  <div class="input-panel">
+    <div class="input-panel-header">
+      <h2 style="font-size:0.9375rem;font-weight:600;color:var(--text);margin-bottom:0.75rem;">Submit Code</h2>
+    </div>
+
+    <!-- Tab strip -->
+    <div class="panel-tabs">
+      <div class="panel-tab active" data-tab="paste">
+        <i data-lucide="code-2" style="width:12px;height:12px;"></i> Paste Code
+      </div>
+      <div class="panel-tab" data-tab="upload">
+        <i data-lucide="upload" style="width:12px;height:12px;"></i> Upload File
+      </div>
+    </div>
+
+    <!-- Paste tab -->
+    <div class="tab-pane active" id="pane-paste">
+      <div class="monaco-container">
+        <div id="monaco-editor"></div>
+      </div>
+    </div>
+
+    <!-- Upload tab -->
+    <div class="tab-pane" id="pane-upload">
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept=".py,.js,.ts,.jsx,.tsx,.java,.go,.rb,.php,.rs,.swift,.kt,.c,.cpp,.cs,.sql,.sh,.html,.css,.yaml,.yml,.json,.toml,.txt" />
+        <div class="drop-icon">📁</div>
+        <div class="drop-title">Drop a file here</div>
+        <div class="drop-subtitle">or click to browse<br>.py .js .ts .java .go .rb .php .rs .c .cpp …</div>
+        <div class="drop-file-selected" id="drop-file-name" hidden></div>
+      </div>
+    </div>
+
+    <!-- Input footer -->
+    <div class="input-footer">
+      <!-- Language chips -->
+      <div>
+        <div class="form-label" style="margin-bottom:0.5rem;">
+          <i data-lucide="cpu" style="width:12px;height:12px;"></i> Language
+          <span id="detected-lang-badge" class="badge badge-success" style="display:none;margin-left:6px;">auto-detected</span>
+        </div>
+        <div class="chips-row" id="lang-chips" style="flex-wrap:wrap;gap:0.375rem;">
+          <button class="chip active" data-lang="auto">✦ Auto</button>
+          <button class="chip" data-lang="python">Python</button>
+          <button class="chip" data-lang="javascript">JS</button>
+          <button class="chip" data-lang="typescript">TS</button>
+          <button class="chip" data-lang="java">Java</button>
+          <button class="chip" data-lang="go">Go</button>
+          <button class="chip" data-lang="cpp">C++</button>
+          <button class="chip" data-lang="rust">Rust</button>
+        </div>
+      </div>
+
+      <!-- Sample load buttons -->
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn btn-ghost btn-sm" data-sample="buggy.py">Load buggy.py</button>
+        <button class="btn btn-ghost btn-sm" data-sample="buggy.js">Load buggy.js</button>
+        <button class="btn btn-ghost btn-sm" data-sample="buggy.java">Load buggy.java</button>
+      </div>
+
+      <!-- Analyze -->
+      <button id="analyze-btn" class="btn btn-primary btn-lg w-full">
+        <i data-lucide="zap" style="width:16px;height:16px;"></i>
+        Analyze Code
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ RESULTS PANEL ═══ -->
+  <div class="results-panel" id="results-panel">
+
+    <!-- Empty state -->
+    <div class="results-empty" id="results-empty">
+      <div style="font-size:3.5rem;">🔍</div>
+      <div style="font-size:1rem;font-weight:600;color:var(--text);">Ready to Review</div>
+      <p style="font-size:0.875rem;color:var(--text-muted);text-align:center;max-width:320px;line-height:1.6;">
+        Paste your code or upload a file, then click Analyze. Gemini will review it for bugs, security issues, and improvements.
+      </p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:center;">
+        <span class="badge">Security</span>
+        <span class="badge">Logic Bugs</span>
+        <span class="badge">Performance</span>
+        <span class="badge">Best Practices</span>
+        <span class="badge">Refactored Code</span>
+      </div>
+    </div>
+
+    <!-- Results (hidden until analysis) -->
+    <div id="results-content" hidden>
+
+      <!-- Score section -->
+      <div class="score-section">
+        <div class="score-ring-wrap">
+          <svg class="score-ring-svg" width="90" height="90" viewBox="0 0 90 90">
+            <circle class="score-ring-bg" cx="45" cy="45" r="40" />
+            <circle class="score-ring-fill" id="score-ring" cx="45" cy="45" r="40" />
+          </svg>
+          <div class="score-ring-label">
+            <span class="score-number" id="score-number">—</span>
+            <span class="score-label">score</span>
+          </div>
+        </div>
+        <div class="score-meta">
+          <div class="score-title">
+            Code Review Complete
+            <span id="lang-badge" class="badge"></span>
+            <span id="filename-badge" class="badge"></span>
+          </div>
+          <div class="score-summary" id="score-summary"></div>
+        </div>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="stats-bar" id="stats-bar">
+        <div class="stat-chip all active" data-filter="all">All</div>
+        <div class="stat-chip critical" data-filter="critical"><span class="severity-dot critical"></span><span id="cnt-critical">0</span> Critical</div>
+        <div class="stat-chip high"     data-filter="high"><span class="severity-dot high"></span><span id="cnt-high">0</span> High</div>
+        <div class="stat-chip medium"   data-filter="medium"><span class="severity-dot medium"></span><span id="cnt-medium">0</span> Medium</div>
+        <div class="stat-chip low"      data-filter="low"><span class="severity-dot low"></span><span id="cnt-low">0</span> Low</div>
+        <div class="stat-chip info"     data-filter="info"><span class="severity-dot info"></span><span id="cnt-info">0</span> Info</div>
+      </div>
+
+      <!-- Result tabs -->
+      <div class="result-tabs">
+        <div class="panel-tab active" data-result-tab="issues">
+          <i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Issues
+        </div>
+        <div class="panel-tab" data-result-tab="fixed">
+          <i data-lucide="check-circle" style="width:12px;height:12px;"></i> Fixed Code
+        </div>
+        <div class="panel-tab" data-result-tab="diff">
+          <i data-lucide="git-merge" style="width:12px;height:12px;"></i> Diff
+        </div>
+      </div>
+
+      <!-- Issues tab -->
+      <div class="bugs-list" id="bugs-list"></div>
+
+      <!-- Fixed code tab -->
+      <div class="code-panel" id="panel-fixed">
+        <div class="flex items-center justify-between">
+          <span class="text-sm" style="color:var(--text-muted);">AI-refactored version with all issues resolved</span>
+          <button id="copy-fixed-btn" class="btn btn-ghost btn-sm">
+            <i data-lucide="copy" style="width:12px;height:12px;"></i> Copy
+          </button>
+        </div>
+        <div id="fixed-code-container"></div>
+      </div>
+
+      <!-- Diff tab -->
+      <div class="diff-panel" id="panel-diff">
+        <div class="flex items-center gap-2">
+          <span class="badge badge-warning">Original</span>
+          <i data-lucide="arrow-right" style="width:12px;height:12px;color:var(--text-muted);"></i>
+          <span class="badge badge-success">Refactored</span>
+          <span class="text-sm" style="color:var(--text-muted);margin-left:auto;">Monaco Diff Editor</span>
+        </div>
+        <div id="diff-container"></div>
+      </div>
+
+      <!-- Performance notes -->
+      <div class="perf-notes" id="perf-notes" hidden>
+        <i data-lucide="trending-up" style="width:14px;height:14px;color:var(--accent);flex-shrink:0;margin-top:1px;"></i>
+        <span id="perf-notes-text"></span>
+      </div>
+
+      <!-- Export bar -->
+      <div class="export-bar">
+        <button id="export-md-btn" class="btn btn-ghost btn-sm">
+          <i data-lucide="download" style="width:13px;height:13px;"></i>
+          Export .md
+        </button>
+        <button id="re-analyze-btn" class="btn btn-ghost btn-sm">
+          <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>
+          Re-analyze
+        </button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Analyzing overlay -->
+<div class="analyzing-overlay" id="analyzing-overlay">
+  <div class="analyzing-card">
+    <div class="analyzing-spinner"></div>
+    <div style="font-size:1rem;font-weight:600;color:var(--text);">Analyzing code…</div>
+    <div class="analyzing-step" id="analyzing-step">Sending to Gemini AI</div>
+    <div class="analyzing-step" style="font-size:0.75rem;opacity:0.6;">This usually takes 5–15 seconds</div>
+  </div>
+</div>
+
+<footer class="footer">
+  Built by <strong>Nikhil</strong> · DecodeLabs GenAI Internship 2026 ·
+  powered by <a href="https://ai.google.dev" target="_blank" rel="noopener">Google Gemini</a>
+</footer>
+
+<div id="toast-container"></div>
+
+<!-- Monaco Editor CDN -->
+<script>var require = { paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.47.0/min/vs' } };</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.47.0/min/vs/loader.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="/static/js/app.js" defer></script>
+<script defer>document.addEventListener('DOMContentLoaded',()=>{if(window.lucide)lucide.createIcons();});</script>
+</body>
+</html>
