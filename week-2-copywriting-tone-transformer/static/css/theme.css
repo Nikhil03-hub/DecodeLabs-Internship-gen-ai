@@ -78,6 +78,9 @@ body {
   background-position: 0 0;
 }
 
+/* Ensure [hidden] attribute always hides — overrides display: flex on .empty-state etc. */
+[hidden] { display: none !important; }
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--surface); }
@@ -163,6 +166,14 @@ code, pre { font-family: var(--font-mono); }
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+
+/* ── Navbar logo SVG ── */
+.navbar-brand svg {
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+.navbar-brand:hover svg { opacity: 0.85; }
 
 .navbar-brand .separator {
   color: var(--border);
@@ -503,9 +514,8 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
-  background: var(--surface-3);
-  border-radius: 2px;
+  height: 16px;        /* Must match thumb height so thumb isn't clipped */
+  background: transparent;  /* Track background lives on the runnable-track */
   outline: none;
   cursor: pointer;
 }
@@ -515,6 +525,7 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 16px;
   height: 16px;
+  margin-top: -6px;   /* Center 16px thumb on 4px track: (4-16)/2 = -6px */
   background: linear-gradient(135deg, var(--brand), var(--brand-2));
   border-radius: 50%;
   cursor: pointer;

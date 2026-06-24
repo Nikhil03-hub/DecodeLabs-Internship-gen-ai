@@ -100,7 +100,6 @@ def _gemini_generate(
     contents: list[Any] = []
     for msg in messages:
         role = msg.get("role", "user")
-        # google-genai SDK uses "user" and "model" roles
         if role not in ("user", "model"):
             role = "user"
         contents.append(
@@ -118,9 +117,11 @@ def _gemini_generate(
         candidate_count=1,
     )
 
+    # Create client ONCE outside the retry loop (avoids repeated AFC init messages)
+    client = genai.Client(api_key=_GEMINI_API_KEY)
+
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
-            client = genai.Client(api_key=_GEMINI_API_KEY)
             response = client.models.generate_content(
                 model=_GEMINI_MODEL,
                 contents=contents,
@@ -144,9 +145,9 @@ def _gemini_generate(
         except Exception as exc:
             raw_err = repr(exc)
             err_str = str(exc).lower()
-            logger.error("RAW GEMINI ERROR (attempt %d): %s", attempt, raw_err)
+            logger.error("RAW GEMINI ERROR (attempt %d/%d): %s", attempt, _MAX_RETRIES, raw_err)
 
-            # Auth / invalid key — check BEFORE rate limit
+            # Auth / invalid key — never retry
             if any(k in err_str for k in (
                 "api_key_invalid", "api key", "permission_denied",
                 "api_key not valid", "invalid api key",
@@ -159,7 +160,7 @@ def _gemini_generate(
                     code="auth",
                 ) from exc
 
-            # Model not found / shut down
+            # Model not found / shut down — never retry
             if any(k in err_str for k in (
                 "model not found", "not found", "404",
                 "invalid_argument", "model_not_found",
@@ -170,17 +171,35 @@ def _gemini_generate(
                     code="unknown",
                 ) from exc
 
+            # 503 Server overload — longer backoff (Gemini takes time to recover)
+            if any(k in err_str for k in ("503", "unavailable", "overload")):
+                if attempt < _MAX_RETRIES:
+                    wait = 5.0 * (2 ** (attempt - 1))  # 5s, 10s, 20s, 40s
+                    logger.warning(
+                        "Gemini 503 server overload; retrying in %.0fs (attempt %d/%d)…",
+                        wait, attempt, _MAX_RETRIES
+                    )
+                    time.sleep(wait)
+                    continue
+                raise LLMError(
+                    "Gemini servers are temporarily overloaded (503). "
+                    "This is a Google-side issue — please wait 30–60 seconds and try again.",
+                    code="rate_limit",
+                ) from exc
+
             # Rate limit / quota — exponential back-off
             if any(k in err_str for k in ("429", "quota", "resource_exhausted", "rate_limit")):
                 if attempt < _MAX_RETRIES:
                     wait = _BACKOFF_BASE * (2 ** (attempt - 1))
                     logger.warning(
-                        "Gemini rate-limit; retrying in %.1fs (attempt %d)…", wait, attempt
+                        "Gemini rate-limit; retrying in %.1fs (attempt %d/%d)…",
+                        wait, attempt, _MAX_RETRIES
                     )
                     time.sleep(wait)
                     continue
                 raise LLMError(
-                    f"Gemini quota/rate-limit reached. Free tier: 15 req/min. Raw: {exc}",
+                    f"Gemini quota/rate-limit reached. Free tier: 15 req/min. "
+                    f"Wait a minute and try again. Raw: {exc}",
                     code="rate_limit",
                 ) from exc
 
@@ -191,19 +210,22 @@ def _gemini_generate(
                     code="safety",
                 ) from exc
 
-            # Network / timeout — retry
-            if any(k in err_str for k in ("timeout", "connect", "network", "connection", "unavailable")):
+            # Network / timeout — retry with backoff
+            if any(k in err_str for k in ("timeout", "connect", "network", "connection")):
                 if attempt < _MAX_RETRIES:
                     wait = _BACKOFF_BASE * (2 ** (attempt - 1))
-                    logger.warning("Network error; retrying in %.1fs (attempt %d)…", wait, attempt)
+                    logger.warning(
+                        "Network error; retrying in %.1fs (attempt %d/%d)…",
+                        wait, attempt, _MAX_RETRIES
+                    )
                     time.sleep(wait)
                     continue
                 raise LLMError(
-                    "Network error reaching the Gemini API. Check your connection.",
+                    "Network error reaching the Gemini API. Check your internet connection.",
                     code="network",
                 ) from exc
 
-            # Unknown — pass raw error through so it's visible
+            # Unknown — surface raw error immediately
             logger.error("Gemini API error (attempt %d): %s", attempt, exc, exc_info=True)
             raise LLMError(
                 f"Gemini API error: {exc}",
@@ -211,6 +233,7 @@ def _gemini_generate(
             ) from exc
 
     raise LLMError("Maximum retries exceeded.", code="network")
+
 
 
 # ─── Public API ──────────────────────────────────────────────────────────────
