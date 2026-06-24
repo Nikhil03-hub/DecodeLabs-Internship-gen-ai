@@ -66,8 +66,14 @@ function initSliders() {
     if (!el) return;
     const update = () => {
       val.textContent = fmt(el.value);
-      const pct = ((el.value - el.min) / (el.max - el.min)) * 100;
-      el.style.setProperty('--progress', `${pct}%`);
+      const rawRatio = (el.value - el.min) / (el.max - el.min);
+      // Fill extends to thumb's right edge so entire thumb sits on the filled track
+      const trackW = el.offsetWidth;
+      const thumbW = 16;
+      const pct = trackW > thumbW
+        ? ((rawRatio * (trackW - thumbW) + thumbW) / trackW) * 100
+        : rawRatio * 100;
+      el.style.setProperty('--progress', `${pct.toFixed(2)}%`);
     };
     update();
     el.addEventListener('input', update);
@@ -366,10 +372,21 @@ function replaceSkeletonWithError(id, msg) {
 }
 
 // ─── Lightbox ────────────────────────────────────────────────────────────────
+const lightboxDownloadBtn = document.getElementById('lightbox-download');
+
 function bindLightbox() {
   lightboxClose.addEventListener('click', closeLightbox);
   lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+  if (lightboxDownloadBtn) {
+    lightboxDownloadBtn.addEventListener('click', () => {
+      const src = lightboxImg.src;
+      if (src) {
+        const filename = src.split('/').pop() || 'image.png';
+        downloadFile(src, filename);
+      }
+    });
+  }
 }
 
 function openLightbox(url) {
@@ -475,13 +492,28 @@ function hideEmpty() {
 }
 
 // ─── Inline download helper ───────────────────────────────────────────────────
-function downloadFile(url, filename) {
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+// Uses fetch→blob to force a file download regardless of content-type.
+// Plain <a download> only works when the server sends Content-Disposition:attachment;
+// images served from /static/ have no such header so the browser navigates instead.
+async function downloadFile(url, filename) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'image.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    // Fallback: try direct href
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'image.png';
+    a.click();
+  }
 }
 
 // ─── Toast system ─────────────────────────────────────────────────────────────

@@ -18,6 +18,14 @@ const PLATFORM_HINTS = {
   'Twitter/X': '280 char limit · Every word counts',
 };
 
+// ─── Status helper (null-safe — status-dot/text may not exist in all layouts) ─
+function setStatus(dotClass, text) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if (dot) dot.className = dotClass;
+  if (txt) txt.textContent = text;
+}
+
 // ─── Toast ───────────────────────────────────────────────────────────────────
 
 function showToast(title, message = '', type = 'info', duration = 4000) {
@@ -55,10 +63,15 @@ function initSliders() {
     const update = () => {
       const v = parseFloat(el.value);
       val.textContent = decimals > 0 ? v.toFixed(decimals) : v;
-      // Visual fill for the track
+      // Fill extends to thumb's right edge so entire thumb sits on the filled track
       const min = parseFloat(el.min), max = parseFloat(el.max);
-      const pct = ((v - min) / (max - min)) * 100;
-      el.style.setProperty('--progress', pct + '%');
+      const rawRatio = (v - min) / (max - min);
+      const trackW = el.offsetWidth;
+      const thumbW = 16;
+      const pct = trackW > thumbW
+        ? ((rawRatio * (trackW - thumbW) + thumbW) / trackW) * 100
+        : rawRatio * 100;
+      el.style.setProperty('--progress', pct.toFixed(2) + '%');
     };
 
     el.addEventListener('input', update);
@@ -75,8 +88,10 @@ function initChips() {
       document.querySelectorAll('#platform-chips .chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       selectedPlatform = chip.dataset.value;
-      document.getElementById('selected-platform-badge').textContent = selectedPlatform;
-      document.getElementById('platform-hint').textContent = PLATFORM_HINTS[selectedPlatform] || '';
+      const badge = document.getElementById('selected-platform-badge');
+      if (badge) badge.textContent = selectedPlatform;
+      const hint = document.getElementById('platform-hint');
+      if (hint) hint.textContent = PLATFORM_HINTS[selectedPlatform] || '';
     });
   });
 
@@ -90,8 +105,9 @@ function initChips() {
     });
   });
 
-  // Set initial hint
-  document.getElementById('platform-hint').textContent = PLATFORM_HINTS[selectedPlatform] || '';
+  // Set initial hint (element may not exist in all layout variants)
+  const initialHint = document.getElementById('platform-hint');
+  if (initialHint) initialHint.textContent = PLATFORM_HINTS[selectedPlatform] || '';
 }
 
 // ─── Char meter ──────────────────────────────────────────────────────────────
@@ -191,8 +207,7 @@ async function generate() {
   const btn = document.getElementById('generate-btn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner spinner-sm"></div><span>Generating…</span>';
-  document.getElementById('status-dot').className = 'status-dot loading';
-  document.getElementById('status-text').textContent = 'Generating…';
+  setStatus('status-dot loading', 'Generating…');
 
   // Show skeletons
   document.getElementById('results-empty').hidden = true;
@@ -225,14 +240,12 @@ async function generate() {
     document.getElementById('export-bar').hidden = false;
     document.getElementById('export-bar').style.display = 'flex';
 
-    document.getElementById('status-dot').className = 'status-dot online';
-    document.getElementById('status-text').textContent = 'Ready';
+    setStatus('status-dot online', 'Ready');
 
   } catch (err) {
     document.getElementById('variations-container').innerHTML = '';
     showToast('Generation failed', err.message, 'error');
-    document.getElementById('status-dot').className = 'status-dot offline';
-    document.getElementById('status-text').textContent = 'Error';
+    setStatus('status-dot offline', 'Error');
   } finally {
     isLoading = false;
     btn.disabled = false;

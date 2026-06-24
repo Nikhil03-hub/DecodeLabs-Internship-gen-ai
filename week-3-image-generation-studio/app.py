@@ -18,20 +18,24 @@ import logging
 import os
 import time
 
-from flask import Flask, jsonify, render_template, request, send_file, send_from_directory
 from dotenv import load_dotenv
+
+# Load .env BEFORE importing local modules so os.environ is populated
+# when image_client.py reads HUGGINGFACE_API_TOKEN at import time.
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+from flask import Flask, jsonify, render_template, request, send_file, send_from_directory
 
 from image_client import ImageGenError, check_config, generate as gen_image
 from storage import log_metadata, recent, save_stream, validate, zip_selected
 from studio import ASPECT_RATIOS, STYLE_PRESETS, build_payload
 
 # ─── Bootstrap ───────────────────────────────────────────────────────────────
-
-load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
 
 try:

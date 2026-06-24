@@ -18,13 +18,21 @@ import requests
 logger = logging.getLogger(__name__)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
+# Read lazily at call-time so load_dotenv() in app.py always takes effect
+# regardless of import order.
 
-_HF_TOKEN = os.environ.get("HUGGINGFACE_API_TOKEN", "")
-_MODEL_ID  = os.environ.get("HF_MODEL_ID", "stabilityai/stable-diffusion-xl-base-1.0")
-_HF_URL    = f"https://api-inference.huggingface.co/models/{_MODEL_ID}"
+def _get_token() -> str:
+    return os.environ.get("HUGGINGFACE_API_TOKEN", "")
 
-# PDF-specified timeouts (R4): connect=3.05s, read=60s
-_TIMEOUT = (3.05, 60)
+def _get_model_url() -> str:
+    model_id = os.environ.get("HF_MODEL_ID", "black-forest-labs/FLUX.1-schnell")
+    # Use the new HF Inference Router — the legacy api-inference.huggingface.co
+    # subdomain is being phased out; router.huggingface.co is the current endpoint.
+    return f"https://router.huggingface.co/hf-inference/models/{model_id}"
+
+# PDF-specified timeouts (R4): connect=10s, read=180s
+# SDXL on free tier can take 90-180s to generate; 3.05s connect is too aggressive on Windows.
+_TIMEOUT = (10, 180)
 
 # Exponential back-off delays (R5): 1 → 2 → 4 → 8 seconds
 _BACKOFF_DELAYS = [1, 2, 4, 8]
@@ -42,7 +50,7 @@ class ImageGenError(Exception):
 # ─── Config check ────────────────────────────────────────────────────────────
 
 def check_config() -> None:
-    if not _HF_TOKEN:
+    if not _get_token():
         raise ImageGenError(
             "HUGGINGFACE_API_TOKEN is not set. "
             "Get a free token at https://huggingface.co/settings/tokens and add it to .env",
@@ -70,11 +78,13 @@ def generate(payload: dict) -> tuple[bytes, str]:
     ------
     ImageGenError : on permanent failure
     """
-    if not _HF_TOKEN:
+    token = _get_token()
+    if not token:
         raise ImageGenError("HUGGINGFACE_API_TOKEN not set.", code="auth")
 
+    hf_url = _get_model_url()
     headers = {
-        "Authorization": f"Bearer {_HF_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Accept": "image/png",
     }
 
@@ -82,10 +92,10 @@ def generate(payload: dict) -> tuple[bytes, str]:
 
     for attempt, delay in enumerate(["initial"] + _BACKOFF_DELAYS):
         try:
-            logger.debug("HF request attempt %d → %s", attempt, _HF_URL)
+            logger.debug("HF request attempt %d → %s", attempt, hf_url)
 
             response = requests.post(
-                _HF_URL,
+                hf_url,
                 json=payload,
                 headers=headers,
                 timeout=_TIMEOUT,   # R4 — connect + read timeout
@@ -155,14 +165,25 @@ def generate(payload: dict) -> tuple[bytes, str]:
             logger.info("HF image received: %d bytes, status=%s", len(image_bytes), status_msg)
             return image_bytes, status_msg
 
-        except (requests.ConnectionError, requests.Timeout) as exc:
+        except requests.Timeout as exc:
             if attempt < len(_BACKOFF_DELAYS):
                 wait = _BACKOFF_DELAYS[min(attempt, len(_BACKOFF_DELAYS) - 1)]
-                logger.warning("Network error, retrying in %ds: %s", wait, exc)
+                logger.warning("Timeout, retrying in %ds: %s", wait, exc)
                 time.sleep(wait)
                 continue
             raise ImageGenError(
-                "Network error reaching the image API. Check your connection.",
+                "Image generation timed out (SDXL can be slow on free tier). Try again in a moment.",
+                code="timeout",
+            ) from exc
+
+        except requests.ConnectionError as exc:
+            if attempt < len(_BACKOFF_DELAYS):
+                wait = _BACKOFF_DELAYS[min(attempt, len(_BACKOFF_DELAYS) - 1)]
+                logger.warning("Connection error, retrying in %ds: %s", wait, exc)
+                time.sleep(wait)
+                continue
+            raise ImageGenError(
+                "Cannot reach the HuggingFace API. Check your internet connection and try again.",
                 code="network",
             ) from exc
 

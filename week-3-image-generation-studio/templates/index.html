@@ -196,6 +196,24 @@
       font-size: 1.25rem;
     }
 
+    .lightbox-download {
+      position: absolute;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--brand);
+      border: none;
+      border-radius: var(--radius);
+      padding: 0.5rem 1.25rem;
+      color: #fff;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: opacity 0.15s;
+    }
+    .lightbox-download:hover { opacity: 0.85; }
+
     /* ── History sidebar (right) ── */
     .history-panel {
       border-left: 1px solid var(--border);
@@ -274,6 +292,19 @@
     .aspect-option.active .aspect-label { color: var(--brand); font-weight: 600; }
 
     /* ── Responsive ── */
+
+    /* ── Compact composer — visible at 90% zoom ── */
+    .composer-scroll { padding: 0.75rem; gap: 0.6rem; }
+    .composer-scroll .form-label { font-size: 0.75rem; margin-bottom: 0.2rem; }
+    .composer-scroll .form-input { padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .composer-scroll .form-textarea { padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .composer-scroll .slider-group { gap: 0.55rem; }
+    .composer-scroll .slider-hint { font-size: 0.6875rem; margin-top: 0.25rem; }
+    .composer-scroll .chips-row { gap: 0.3rem; }
+    .composer-scroll .chip { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+    .composer-scroll .aspect-label { font-size: 0.625rem; }
+    .composer-action { padding: 0.5rem 0.875rem 0.625rem; }
+
     @media (max-width: 1100px) {
       .studio-layout { grid-template-columns: 300px 1fr; }
       .history-panel { display: none; }
@@ -289,16 +320,31 @@
 <body>
 
 <nav class="navbar">
-  <a href="/" class="navbar-brand">
-    <span class="wordmark">DecodeLabs · GenAI Suite</span>
+  <a href="/" class="navbar-brand" aria-label="Nexus AI">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z" stroke="url(#nb-g)" stroke-width="1.5" fill="rgba(99,102,241,0.08)"/>
+      <circle cx="14" cy="14" r="2.5" fill="url(#nb-g)"/>
+      <line x1="14" y1="6.5" x2="14" y2="11.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="14" y1="16.5" x2="14" y2="21.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="8.5" y1="10.5" x2="12" y2="12.75" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="16" y1="15.25" x2="19.5" y2="17.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="8.5" y1="17.5" x2="12" y2="15.25" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="16" y1="12.75" x2="19.5" y2="10.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <circle cx="14" cy="5.5" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="14" cy="22.5" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="8" cy="10" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="20" cy="18" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="8" cy="18" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="20" cy="10" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <defs>
+        <linearGradient id="nb-g" x1="2.5" y1="2" x2="25.5" y2="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#6366F1"/>
+          <stop offset="100%" stop-color="#A855F7"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <span class="wordmark">Nexus AI</span>
   </a>
-  <div class="flex items-center gap-3">
-    <div id="status-pill" class="status-pill">
-      <span class="status-dot online" id="status-dot"></span>
-      <span id="status-text">Ready</span>
-    </div>
-    <span class="navbar-project-label hide-mobile">Week 3 · Image Studio</span>
-  </div>
 </nav>
 
 <main class="studio-layout">
@@ -312,7 +358,7 @@
       <label class="form-label" for="prompt">
         <i data-lucide="pen-tool" style="width:13px;height:13px;"></i> Prompt
       </label>
-      <textarea id="prompt" class="form-textarea" rows="4"
+      <textarea id="prompt" class="form-textarea" rows="3"
         placeholder="Describe the image you want to generate…"></textarea>
     </div>
 
@@ -454,13 +500,12 @@
 <!-- ═══ Lightbox ═══ -->
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Image preview">
   <button class="lightbox-close" id="lightbox-close" aria-label="Close">×</button>
+  <button class="lightbox-download" id="lightbox-download" aria-label="Download image" title="Download image">
+    ↓ Download
+  </button>
   <img id="lightbox-img" src="" alt="Generated image" />
 </div>
 
-<footer class="footer">
-  Built by <strong>Nikhil</strong> · DecodeLabs GenAI Internship 2026 ·
-  powered by <a href="https://huggingface.co" target="_blank" rel="noopener">Hugging Face SDXL</a>
-</footer>
 
 <div id="toast-container"></div>
 
