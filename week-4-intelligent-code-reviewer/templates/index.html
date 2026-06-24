@@ -500,16 +500,31 @@
 <body>
 
 <nav class="navbar">
-  <a href="/" class="navbar-brand">
-    <span class="wordmark">DecodeLabs · GenAI Suite</span>
+  <a href="/" class="navbar-brand" aria-label="Nexus AI">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z" stroke="url(#nb-g)" stroke-width="1.5" fill="rgba(99,102,241,0.08)"/>
+      <circle cx="14" cy="14" r="2.5" fill="url(#nb-g)"/>
+      <line x1="14" y1="6.5" x2="14" y2="11.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="14" y1="16.5" x2="14" y2="21.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="8.5" y1="10.5" x2="12" y2="12.75" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="16" y1="15.25" x2="19.5" y2="17.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="8.5" y1="17.5" x2="12" y2="15.25" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <line x1="16" y1="12.75" x2="19.5" y2="10.5" stroke="url(#nb-g)" stroke-width="1.25" stroke-linecap="round"/>
+      <circle cx="14" cy="5.5" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="14" cy="22.5" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="8" cy="10" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="20" cy="18" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="8" cy="18" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <circle cx="20" cy="10" r="1.2" fill="url(#nb-g)" opacity="0.75"/>
+      <defs>
+        <linearGradient id="nb-g" x1="2.5" y1="2" x2="25.5" y2="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#6366F1"/>
+          <stop offset="100%" stop-color="#A855F7"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <span class="wordmark">Nexus AI</span>
   </a>
-  <div class="flex items-center gap-3">
-    <div id="status-pill" class="status-pill">
-      <span class="status-dot online" id="status-dot"></span>
-      <span id="status-text">Ready</span>
-    </div>
-    <span class="navbar-project-label hide-mobile">Week 4 · Code Reviewer</span>
-  </div>
 </nav>
 
 <main class="reviewer-layout">
@@ -706,10 +721,6 @@
   </div>
 </div>
 
-<footer class="footer">
-  Built by <strong>Nikhil</strong> · DecodeLabs GenAI Internship 2026 ·
-  powered by <a href="https://ai.google.dev" target="_blank" rel="noopener">Google Gemini</a>
-</footer>
 
 <div id="toast-container"></div>
 

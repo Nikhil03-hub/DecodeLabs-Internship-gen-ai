@@ -31,6 +31,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024  # 200 KB upload limit
 
