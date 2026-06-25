@@ -8,6 +8,12 @@
 [![Gemini](https://img.shields.io/badge/Gemini-Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-MIT-green)](../LICENSE)
 
+```bash
+cd week-1-ai-chatbot-memory
+cp .env.example .env   # add GEMINI_API_KEY
+python app.py          # → http://localhost:5000
+```
+
 ---
 
 ## Screenshots
