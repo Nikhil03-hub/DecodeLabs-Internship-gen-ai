@@ -172,7 +172,7 @@ def analyze(code: str, filename: str = "code", language: str | None = None) -> d
         messages=[{"role": "user", "content": user_msg}],
         temperature=0.2,       # low temp → deterministic, structured output
         top_p=0.95,
-        max_output_tokens=4096,
+        max_output_tokens=16384,   # increased: complex reviews with full refactored_code easily exceed 4096
         system=_SYSTEM_PROMPT,
     )
 
@@ -202,7 +202,7 @@ def analyze(code: str, filename: str = "code", language: str | None = None) -> d
         messages=[{"role": "user", "content": repair_msg}],
         temperature=0.1,
         top_p=0.9,
-        max_output_tokens=4096,
+        max_output_tokens=16384,   # same increase as first attempt
         system=_SYSTEM_PROMPT,
     )
 

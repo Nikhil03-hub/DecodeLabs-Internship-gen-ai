@@ -229,7 +229,7 @@ async function handleAnalyze() {
   if (state.uploadedFilename) filename = state.uploadedFilename;
 
   state.originalCode = code;
-  showAnalyzing('Sending to Gemini AI…');
+  showAnalyzing('Reviewing your code…');
 
   try {
     const res = await fetch('/api/review-text', {
@@ -266,7 +266,7 @@ async function handleFileAnalyze() {
   reader.readAsText(state.uploadedFile);
 
   try {
-    updateAnalyzingStep('Analyzing with Gemini…');
+    updateAnalyzingStep('Analyzing your file…');
     const res = await fetch('/api/review', { method: 'POST', body: formData });
     const data = await res.json();
     hideAnalyzing();
@@ -489,14 +489,18 @@ document.getElementById('copy-fixed-btn').addEventListener('click', () => {
 // ─── Export .md ──────────────────────────────────────────────────────────────
 document.getElementById('export-md-btn').addEventListener('click', () => {
   if (!state.lastResult) return;
-  const md = buildMarkdownReport(state.lastResult, state.uploadedFilename || 'code');
+  const md   = buildMarkdownReport(state.lastResult, state.uploadedFilename || 'code');
   const blob = new Blob([md], { type: 'text/markdown' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url;
-  a.download = `code-review-${Date.now()}.md`;
+  const safe = (state.uploadedFilename || 'code').replace(/[^a-z0-9._-]/gi, '-');
+  a.href     = url;
+  a.download = `code-review-${safe}-${Date.now()}.md`;
+  // Must append to body so browser triggers download instead of navigating
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);  // delay so browser can start download
   showToast('Report exported!', 'success');
 });
 
@@ -547,12 +551,12 @@ document.getElementById('re-analyze-btn').addEventListener('click', handleAnalyz
 
 // ─── Analyzing overlay ───────────────────────────────────────────────────────
 const _analyzeSteps = [
-  'Sending to Gemini AI…',
   'Reading code structure…',
   'Identifying security issues…',
   'Checking for logic bugs…',
   'Generating refactored code…',
   'Compiling review…',
+  'Almost done…',
 ];
 
 let _stepTimer = null;
@@ -579,11 +583,13 @@ function hideAnalyzing() {
 
 function updateAnalyzingStep(msg) { analyzingStep.textContent = msg; }
 
-// ─── Status ──────────────────────────────────────────────────────────────────
+// ─── Status (null-safe — status-dot/text may not exist in all layouts) ───────
 function setStatus(text, type) {
-  statusText.textContent = text;
-  statusDot.className = 'status-dot';
-  statusDot.classList.add(type === 'online' ? 'online' : type === 'loading' ? 'loading' : 'offline');
+  if (statusText) statusText.textContent = text;
+  if (statusDot) {
+    statusDot.className = 'status-dot';
+    statusDot.classList.add(type === 'online' ? 'online' : type === 'loading' ? 'loading' : 'offline');
+  }
 }
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
